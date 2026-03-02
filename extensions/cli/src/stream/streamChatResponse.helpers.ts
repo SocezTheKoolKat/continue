@@ -366,59 +366,55 @@ export function recordStreamTelemetry(options: {
     costUsd: cost,
   });
 
-  // Mirror core metrics to PostHog for product analytics
+  reportToPostHog({
+    model: model.model,
+    totalDuration,
+    actualInputTokens,
+    actualOutputTokens,
+    cost,
+    fullUsage,
+    toolCount: tools?.length ?? 0,
+  });
+
+  return cost;
+}
+
+function reportToPostHog(opts: {
+  model: string;
+  totalDuration: number;
+  actualInputTokens: number;
+  actualOutputTokens: number;
+  cost: number;
+  fullUsage?: any;
+  toolCount: number;
+}): void {
   const cacheReadTokens =
-    fullUsage?.prompt_tokens_details?.cache_read_tokens ?? 0;
+    opts.fullUsage?.prompt_tokens_details?.cache_read_tokens ?? 0;
   const cacheWriteTokens =
-    fullUsage?.prompt_tokens_details?.cache_write_tokens ?? 0;
+    opts.fullUsage?.prompt_tokens_details?.cache_write_tokens ?? 0;
 
   try {
     posthogService.capture("apiRequest", {
-      model: model.model,
-      durationMs: totalDuration,
-      inputTokens: actualInputTokens,
-      outputTokens: actualOutputTokens,
-      costUsd: cost,
+      model: opts.model,
+      durationMs: opts.totalDuration,
+      inputTokens: opts.actualInputTokens,
+      outputTokens: opts.actualOutputTokens,
+      costUsd: opts.cost,
       cacheReadTokens,
       cacheWriteTokens,
     });
 
-    // Emit prompt_cache_metrics for the Prompt Cache Performance dashboard
-    if (actualInputTokens > 0) {
+    if (opts.actualInputTokens > 0) {
       posthogService.capture("prompt_cache_metrics", {
-        model: model.model,
+        model: opts.model,
         cache_read_tokens: cacheReadTokens,
         cache_write_tokens: cacheWriteTokens,
-        total_prompt_tokens: actualInputTokens,
-        cache_hit_rate: cacheReadTokens / actualInputTokens,
-        tool_count: tools?.length ?? 0,
+        total_prompt_tokens: opts.actualInputTokens,
+        cache_hit_rate: cacheReadTokens / opts.actualInputTokens,
+        tool_count: opts.toolCount,
       });
     }
   } catch {}
-
-  // Report prompt cache metrics to PostHog
-  if (fullUsage?.prompt_tokens_details) {
-    const cacheReadTokens =
-      fullUsage.prompt_tokens_details.cache_read_tokens ?? 0;
-    const cacheWriteTokens =
-      fullUsage.prompt_tokens_details.cache_write_tokens ?? 0;
-    const totalPromptTokens = fullUsage.prompt_tokens ?? 0;
-    const cacheHitRate =
-      totalPromptTokens > 0 ? cacheReadTokens / totalPromptTokens : 0;
-
-    try {
-      void posthogService.capture("prompt_cache_metrics", {
-        model: model.model,
-        cache_read_tokens: cacheReadTokens,
-        cache_write_tokens: cacheWriteTokens,
-        total_prompt_tokens: totalPromptTokens,
-        cache_hit_rate: cacheHitRate,
-        tool_count: tools?.length ?? 0,
-      });
-    } catch {}
-  }
-
-  return cost;
 }
 
 /**
